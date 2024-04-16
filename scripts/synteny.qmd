@@ -1,0 +1,206 @@
+---
+title: "synteny"
+author: "Glebus Alexandr"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Исследовние синтении Cobetia spp
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+library(GenomicFeatures)
+library(dplyr)
+library(tidyverse)
+library(GenomicFeatures)
+library(ggbio)
+library(GenomicRanges)
+library(Gviz)
+library(rtracklayer)
+```
+
+## phoD
+
+Используем файл [ALP_blast.xlsx](https://github.com/glebus-sasha/VL/blob/main/reports/ALP_blast.xlsx) из предыдущей работы. Исследуем гомологи phoD.
+
+Выберем штамм: Cobetia_amphilecti_KMM_296,
+
+у него гомолог phoD: WP_052384691.1
+
+Посмотрим, какие гомологи phoD есть в штамме Cobetia_amphilecti_KMM_296.
+
+```{r}
+file <- "C:/VL2/data/GTF_files/14.Cobetia_amphilecti_KMM_296_GCF_000754225.1.gtf"
+
+# Чтение GTF-файла
+gtf <- rtracklayer::readGFF(file)
+
+# Найти координаты гомолога по protein_id
+gtf %>%
+  filter(product == "alkaline phosphatase D family protein") %>% 
+  select(type, start, end, protein_id, product, gene)
+```
+
+```{r}
+gtf %>%
+  filter(start > 4000, start < 5000, !is.na(gene)) %>% 
+  select(type, start, end, protein_id, gene, gene_id) %>% view()
+```
+
+Есть 2 гомолога, нам нужен именно WP_052384691.1
+
+```{r}
+
+file <- "C:/VL2/data/GTF_files/14.Cobetia_amphilecti_KMM_296_GCF_000754225.1.gtf"
+
+# Чтение GTF-файла
+gtf <- rtracklayer::readGFF(file)
+
+# Найти координаты гомолога по protein_id
+gtf %>%
+  filter(protein_id == "WP_052384691.1") %>% 
+  select(type, start, end, protein_id, product, gene, gene_id)
+```
+
+Координаты: 4093 - 6267, protein_id: WP_043333989.1, gene_id: KP05_RS10430
+
+Теперь посмотрим окрестности этого гомолога, чтобы найти именованный ген. Для этого добавим новую строку с предполагаемым геном и построим график.
+
+```{r}
+target_gene_name <- "probably_phoD" # Введите соответствующее имя
+protein_id <- "WP_043333989.1" # Введите соответствующий gene_id
+gene_id <- "KP05_RS10430" # Введите соответствующий protein_id
+gene_start <- 4093 # Введите соответствующий start для target gene
+gene_end <- 6267 # Введите соответствующий end для target gene
+
+# Создаем новую строку
+target_gene_raw <- tibble(
+  type = "gene",  
+  start = gene_start,
+  end = gene_end,
+  protein_id = protein_id,  
+  gene = target_gene_name,
+  gene_id = gene_id
+)
+
+# Создаем график
+gtf %>%
+  filter(start > 4000, start < 6300, !is.na(gene), type == "CDS") %>% 
+  select(type, start, end, protein_id, gene, gene_id) %>% 
+  bind_rows(target_gene_raw) %>% 
+  arrange(start) %>% 
+  ggplot(aes(x = start, xend = end, y = gene, yend = gene)) +
+  geom_segment() +
+  geom_point(aes(color = gene)) +
+  geom_point(data = filter(bind_rows(target_gene_raw), gene == target_gene_name), aes(x = start, y = gene), color = "red", size = 3) + # выделение точкой
+  geom_segment(data = filter(bind_rows(target_gene_raw), gene == target_gene_name), aes(x = start, xend = end, y = gene, yend = gene), color = "red", size = 2) + # выделение сегмента
+  labs(x = "Start", y = "Gene", title = "Gene Segments") +
+  theme_minimal()
+```
+
+Попробуем ген "madM" в качестве центрирующего гена
+
+```{r}
+library(rtracklayer)
+
+# Указываем путь к вашему файлу GTF
+file <- "C:/VL2/data/GTF_files/14.Cobetia_amphilecti_KMM_296_GCF_000754225.1.gtf"
+
+# Читаем файл GTF и создаем объект GenomicRanges
+gr <- import(file)
+
+# Создаем геномный интервал для вашего участка
+your_interval <- GRanges("1", IRanges(4093, 6267))
+
+# Визуализируем
+plot(gr, ylim = c(4093, 6267)
+```
+
+library(GenomicRanges)
+
+Находим ген из окрестностей hppD, продукт которого - "alkaline phosphatase D family protein" для всех штаммов
+
+```{r}
+window_size <- 1000
+target_gene_name <- "madM"
+product_name <- "alkaline phosphatase D family protein"
+
+# Находим гены в окрестности target gene
+target_region <- gtf %>%
+  filter(type == "gene" & gene == "yegS") %>%
+  mutate(start_target = start, end_target = end)
+
+# Определяем окрестность 10000 оснований в каждую сторону от target
+flanking_region <- target_region %>%
+  mutate(start_flanking = start_target - window_size, end_flanking = end_target + window_size)
+
+# Фильтруем данные для генов в определенной окрестности
+genes_in_flanking_region <- gtf %>%
+  filter(type == "CDS" & 
+           end >= flanking_region$start_flanking & start <= flanking_region$end_flanking)
+
+
+target_genes <- genes_in_flanking_region %>%
+  filter(product == product_name) %>%
+  select(start, end, gene_id)
+target_genes
+```
+
+```{r}
+# target gene
+
+target_gene_name <- "metG"
+
+# Указать папку с файлами GTF
+gtf_folder <- "C:/VL/data/GTF_files/"
+
+# Получить список файлов GTF в папке
+gtf_files <- list.files(path = gtf_folder, pattern = "\\.gtf$", full.names = TRUE)
+
+# Создать пустой список для хранения результатов
+result_list <- list()
+
+# Цикл по каждому файлу GTF
+for (gtf_file in gtf_files) {
+  # Извлечь название штамма из имени файла
+  strain_name <- tools::file_path_sans_ext(basename(gtf_file))
+  
+  # Загрузка GTF файла
+  gtf_data <- rtracklayer::readGFF(gtf_file)
+  
+  # Находим гены в окрестности target_gene_name
+  target_region <- gtf_data %>%
+    filter(type == "CDS" & gene == target_gene_name) %>%
+    mutate(start_target = start, end_target = end)
+  
+  # Определяем окрестность 10000 оснований в каждую сторону от target
+  flanking_region <- target_region %>%
+    mutate(start_flanking = start_target - 10000, end_flanking = end_target + 10000)
+  
+  # Фильтруем данные для генов в определенной окрестности
+  genes_in_flanking_region <- gtf_data %>%
+    filter(type == "CDS" & 
+             end >= flanking_region$start_flanking & start <= flanking_region$end_flanking)
+  
+  # Проверяем, не является ли набор данных пустым
+  if (nrow(genes_in_flanking_region) > 0) {
+    # Отбираем гены с продуктом "alkaline phosphatase D family protein"
+    target_genes <- genes_in_flanking_region %>%
+      filter(product == "alkaline phosphatase D family protein") %>%
+      select(start, end, gene_id)
+    
+    # Добавляем результат к списку, включая название файла
+    result_list[[strain_name]] <- target_genes %>%
+      mutate(filename = gtf_file)
+  } else {
+    # Добавляем сообщение к списку, включая название файла
+    result_list[[strain_name]] <- data.frame(message = "Гены в окрестности target_gene_name не найдены.", filename = gtf_file)
+  }
+}
+
+# Соединяем все результаты в одну таблицу (если необходимо)
+final_result <- bind_rows(result_list, .id = "strain")
+
+# Печать итоговой таблицы
+print(final_result)
+```

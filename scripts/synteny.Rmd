@@ -1,0 +1,395 @@
+---
+  title: "gene_neighbor_with_coord.R"
+author: "Glebus Alexandr"
+date: "`r Sys.Date()`"
+output: html_document
+---
+  
+  ```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(GenomicFeatures)
+library(dplyr)
+library(tidyverse)
+library(GenomicFeatures)
+library(ggbio)
+library(GenomicRanges)
+library(Gviz)
+library(rtracklayer)
+```
+
+Пробный график окрестностей metG
+
+```{r}
+
+
+file <- "C:/VL/data/GTF_files/14.Cobetia_amphilecti_KMM_296_GCF_000754225.1.gtf"
+
+# Чтение GTF-файла
+gtf <- rtracklayer::readGFF(file)
+
+# Найти координаты metG
+metG_coords <- gtf %>%
+  filter(type == "CDS", gene == "metG") %>%
+  dplyr::select(seqid, start, end)
+
+# Определить окно вокруг metG (например, 10000 bp)
+window_size <- 10000
+
+# Выбрать все CDS в указанном окне вокруг metG
+metG_genes <- gtf %>%
+  filter(type == "CDS",
+         seqid %in% metG_coords$seqid,
+         end >= (metG_coords$start - window_size),
+         start <= (metG_coords$end + window_size)) %>%
+  mutate(direction = if_else(start < end, "->", "<-")) %>%
+  dplyr::select(gene, product, start, end, direction)
+
+# Создать график с использованием ggbio
+p <- ggplot() +
+  xlim(min(metG_genes$start) - 500, max(metG_genes$end) + 500) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_minimal() +
+  geom_rect(data = metG_genes,
+            aes(xmin = start, xmax = end, ymin = 0, ymax = 1, fill = gene),
+            alpha = 0.5) +
+  labs(title = "Гены вокруг metG")
+
+# Вывести график
+p
+```
+окрестности metG для всех штаммов
+```{r}
+library(tidyverse)
+library(GenomicFeatures)
+library(ggbio)
+
+# Путь к папке с GTF-файлами
+folder_path <- "C:/VL/data/GTF_files"
+
+# Получение списка файлов GTF в папке
+gtf_files <- list.files(path = folder_path, pattern = "\\.gtf$", full.names = TRUE)
+
+# Считывание всех GTF-файлов и выбор окрестностей metG
+metG_genes_list <- lapply(gtf_files, function(file) {
+  gtf <- rtracklayer::readGFF(file)
+  metG_coords <- gtf %>%
+    filter(type == "CDS", gene == "metG") %>%
+    dplyr::select(seqid, start, end)
+  
+  window_size <- 10000
+  
+  metG_genes <- gtf %>%
+    filter(type == "CDS",
+           seqid %in% metG_coords$seqid,
+           end >= (metG_coords$start - window_size),
+           start <= (metG_coords$end + window_size)) %>%
+    mutate(direction = if_else(start < end, "->", "<-")) %>%
+    dplyr::select(gene, product, start, end, direction)
+  
+  return(metG_genes)
+})
+
+# Объединение данных из всех файлов
+all_metG_genes <- bind_rows(metG_genes_list, .id = "file_id")
+
+# Создание графика
+p <- ggplot() +
+  geom_rect(data = all_metG_genes,
+            aes(xmin = start, xmax = end, ymin = as.numeric(file_id) - 0.4, ymax = as.numeric(file_id) + 0.4, fill = gene),
+            alpha = 0.5) +
+  scale_y_continuous(breaks = seq_along(gtf_files), labels = gsub(".gtf", "", basename(gtf_files))) +
+  theme_minimal() +
+  labs(title = "Гены вокруг metG")
+
+# Вывод графика
+p
+
+```
+
+
+Окрестности metG для всех штаммов, центрируя координаты по metG
+
+```{r}
+
+library(tidyverse)
+library(GenomicFeatures)
+library(ggbio)
+
+# Путь к папке с GTF-файлами
+folder_path <- "C:/VL/data/GTF_files"
+
+# Получение списка файлов GTF в папке
+gtf_files <- list.files(path = folder_path, pattern = "\\.gtf$", full.names = TRUE)
+
+# Функция для центрирования координат относительно metG
+center_coordinates <- function(gtf_data, metG_coords, window_size = 10000) {
+  metG_coords <- metG_coords %>% dplyr::select(seqid, metG_start = start, metG_end = end)
+  
+  centered_data <- gtf_data %>%
+    filter(type == "CDS",
+           seqid %in% metG_coords$seqid) %>%
+    mutate(centered_start = start - metG_coords$metG_start,
+           centered_end = end - metG_coords$metG_start,
+           direction = if_else(centered_start < centered_end, "->", "<-")) %>%
+    filter(centered_end >= -window_size, centered_start <= window_size) %>%
+    dplyr::select(gene, product, centered_start, centered_end, direction)
+  
+  return(centered_data)
+}
+
+# Считывание и центрирование данных
+metG_genes_list <- lapply(gtf_files, function(file) {
+  gtf <- rtracklayer::readGFF(file)
+  metG_coords <- gtf %>%
+    filter(type == "CDS", gene == "metG") %>%
+    dplyr::select(seqid, start, end)
+  
+  centered_genes <- center_coordinates(gtf, metG_coords)
+  return(centered_genes)
+})
+
+# Объединение данных из всех файлов
+all_metG_genes <- bind_rows(metG_genes_list, .id = "file_id")
+
+# Создание графика
+p <- ggplot() +
+  geom_rect(data = all_metG_genes,
+            aes(xmin = centered_start, xmax = centered_end, ymin = as.numeric(file_id) - 0.4, ymax = as.numeric(file_id) + 0.4, fill = gene),
+            alpha = 0.5) +
+  scale_y_continuous(breaks = seq_along(gtf_files), labels = gsub(".gtf", "", basename(gtf_files))) +
+  theme_minimal() +
+  labs(title = "Гены вокруг metG (центрированные координаты)")
+
+# Вывод графика
+p
+
+```
+
+Находим ген из окрестностей metG, продукт которого - alkaline phosphatase для всех штаммов
+
+```{r}
+# Указать папку с файлами GTF
+gtf_folder <- "C:/VL/data/GTF_files/"
+
+# Получить список файлов GTF в папке
+gtf_files <- list.files(path = gtf_folder, pattern = "\\.gtf$", full.names = TRUE)
+
+# Создать пустой список для хранения результатов
+result_list <- list()
+
+# Цикл по каждому файлу GTF
+for (gtf_file in gtf_files) {
+  # Извлечь название штамма из имени файла
+  strain_name <- tools::file_path_sans_ext(basename(gtf_file))
+  
+  # Загрузка GTF файла
+  gtf_data <- rtracklayer::readGFF(gtf_file)
+  
+  # Находим гены в окрестности metG
+  metG_region <- gtf_data %>%
+    filter(type == "CDS" & gene == "metG") %>%
+    mutate(start_metG = start, end_metG = end)
+  
+  # Определяем окрестность 10000 оснований в каждую сторону от metG
+  flanking_region <- metG_region %>%
+    mutate(start_flanking = start_metG - 10000, end_flanking = end_metG + 10000)
+  
+  # Фильтруем данные для генов в определенной окрестности
+  genes_in_flanking_region <- gtf_data %>%
+    filter(type == "CDS" & 
+             end >= flanking_region$start_flanking & start <= flanking_region$end_flanking)
+  
+  # Проверяем, не является ли набор данных пустым
+  if (nrow(genes_in_flanking_region) > 0) {
+    # Отбираем гены с продуктом "alkaline phosphatase"
+    target_genes <- genes_in_flanking_region %>%
+      filter(product == "alkaline phosphatase") %>%
+      select(start, end, gene_id)
+    
+    # Добавляем результат к списку, включая название файла
+    result_list[[strain_name]] <- target_genes %>%
+      mutate(filename = gtf_file)
+  } else {
+    # Добавляем сообщение к списку, включая название файла
+    result_list[[strain_name]] <- data.frame(message = "Гены в окрестности metG не найдены.", filename = gtf_file)
+  }
+}
+
+# Соединяем все результаты в одну таблицу (если необходимо)
+final_result <- bind_rows(result_list, .id = "strain")
+
+# Печать итоговой таблицы
+print(final_result)
+```
+
+Строим графики только для выбранных штаммов
+
+```{r}
+library(tidyverse)
+library(GenomicFeatures)
+library(ggbio)
+
+
+
+# Получение списка файлов GTF в папке
+gtf_files <- final_result$filename
+
+# Функция для центрирования координат относительно metG
+center_coordinates <- function(gtf_data, metG_coords, window_size = 10000) {
+  metG_coords <- metG_coords %>% dplyr::select(seqid, metG_start = start, metG_end = end)
+  
+  centered_data <- gtf_data %>%
+    filter(type == "CDS",
+           seqid %in% metG_coords$seqid) %>%
+    mutate(centered_start = start - metG_coords$metG_start,
+           centered_end = end - metG_coords$metG_start,
+           direction = if_else(centered_start < centered_end, "->", "<-")) %>%
+    filter(centered_end >= -window_size, centered_start <= window_size) %>%
+    dplyr::select(gene, product, centered_start, centered_end, direction)
+  
+  return(centered_data)
+}
+
+# Считывание и центрирование данных
+metG_genes_list <- lapply(gtf_files, function(file) {
+  gtf <- rtracklayer::readGFF(file)
+  metG_coords <- gtf %>%
+    filter(type == "CDS", gene == "metG") %>%
+    dplyr::select(seqid, start, end)
+  
+  centered_genes <- center_coordinates(gtf, metG_coords)
+  return(centered_genes)
+})
+
+# Объединение данных из всех файлов
+all_metG_genes <- bind_rows(metG_genes_list, .id = "file_id")
+
+# Создание графика
+p <- ggplot() +
+  geom_rect(data = all_metG_genes,
+            aes(xmin = centered_start, xmax = centered_end, ymin = as.numeric(file_id) - 0.4, ymax = as.numeric(file_id) + 0.4, fill = gene),
+            alpha = 0.7) +
+  scale_y_continuous(breaks = seq_along(gtf_files), labels = gsub(".gtf", "", basename(gtf_files))) +
+  theme_minimal() +
+  labs(title = "Гены вокруг metG (центрированные координаты)")
+
+# Вывод графика
+p
+
+```
+Центрируем по ALP
+```{r fig.height=5, fig.width=10}
+library(tidyverse)
+library(GenomicFeatures)
+library(ggbio)
+
+# Получение списка файлов GTF в папке
+gtf_files <- final_result$filename
+
+# Функция для центрирования координат относительно указанного гена
+center_coordinates <- function(gtf_data, center_gene, window_size = 10000) {
+  center_gene_coords <- gtf_data %>%
+    filter(type == "CDS", gene_id == center_gene) %>%
+    dplyr::select(seqid, center_start = start, center_end = end)
+  
+  centered_data <- gtf_data %>%
+    filter(type == "CDS",
+           seqid %in% center_gene_coords$seqid) %>%
+    mutate(centered_start = start - center_gene_coords$center_start,
+           centered_end = end - center_gene_coords$center_start,
+           direction = if_else(centered_start < centered_end, "->", "<-")) %>%
+    filter(centered_end >= -window_size, centered_start <= window_size) %>%
+    dplyr::select(gene, product, centered_start, centered_end, direction)
+  
+  return(centered_data)
+}
+
+# Считывание и центрирование данных
+center_gene_list <- final_result$gene_id
+
+centered_genes_list <- lapply(seq_along(gtf_files), function(i) {
+  file <- gtf_files[i]
+  center_gene <- center_gene_list[i]
+  
+  gtf <- rtracklayer::readGFF(file)
+  centered_genes <- center_coordinates(gtf, center_gene)
+  return(centered_genes)
+})
+
+# Объединение данных из всех файлов
+all_centered_genes <- bind_rows(centered_genes_list, .id = "file_id")
+
+# Изменение лейблов по вертикали
+gtf_files_labels <- gsub("\\d+\\.", "", gsub("_GCF_.*", "", basename(gtf_files)))
+
+# Создание графика
+p <- ggplot() +
+  geom_rect(data = all_centered_genes,
+            aes(xmin = centered_start, xmax = centered_end, ymin = as.numeric(file_id) - 0.4, ymax = as.numeric(file_id) + 0.4, fill = gene),
+            alpha = 1) +
+  scale_y_continuous(breaks = seq_along(gtf_files), labels = gtf_files_labels) +
+  theme_minimal()
+
+# Вывод графика
+p
+
+```
+Увеличим окрестности в 5 раз
+
+```{r fig.height=5, fig.width=10}
+library(tidyverse)
+library(GenomicFeatures)
+library(ggbio)
+
+# Получение списка файлов GTF в папке
+gtf_files <- final_result$filename
+
+# Функция для центрирования координат относительно указанного гена
+center_coordinates <- function(gtf_data, center_gene, window_size = 50000) {
+  center_gene_coords <- gtf_data %>%
+    filter(type == "CDS", gene_id == center_gene) %>%
+    dplyr::select(seqid, center_start = start, center_end = end)
+  
+  centered_data <- gtf_data %>%
+    filter(type == "CDS",
+           seqid %in% center_gene_coords$seqid) %>%
+    mutate(centered_start = start - center_gene_coords$center_start,
+           centered_end = end - center_gene_coords$center_start,
+           direction = if_else(centered_start < centered_end, "->", "<-")) %>%
+    filter(centered_end >= -window_size, centered_start <= window_size) %>%
+    dplyr::select(gene, product, centered_start, centered_end, direction)
+  
+  return(centered_data)
+}
+
+# Считывание и центрирование данных
+center_gene_list <- final_result$gene_id
+
+centered_genes_list <- lapply(seq_along(gtf_files), function(i) {
+  file <- gtf_files[i]
+  center_gene <- center_gene_list[i]
+  
+  gtf <- rtracklayer::readGFF(file)
+  centered_genes <- center_coordinates(gtf, center_gene)
+  return(centered_genes)
+})
+
+# Объединение данных из всех файлов
+all_centered_genes <- bind_rows(centered_genes_list, .id = "file_id")
+
+# Изменение лейблов по вертикали
+gtf_files_labels <- gsub("\\d+\\.", "", gsub("_GCF_.*", "", basename(gtf_files)))
+
+# Создание графика
+p <- ggplot() +
+  geom_rect(data = all_centered_genes,
+            aes(xmin = centered_start, xmax = centered_end, ymin = as.numeric(file_id) - 0.4, ymax = as.numeric(file_id) + 0.4, fill = gene),
+            alpha = 1) +
+  scale_y_continuous(breaks = seq_along(gtf_files), labels = gtf_files_labels) +
+  theme_minimal()
+
+# Вывод графика
+p
+
+```
+
