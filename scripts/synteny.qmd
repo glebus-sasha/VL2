@@ -30,7 +30,7 @@ library(rtracklayer)
 Посмотрим, какие гомологи phoD есть в штамме Cobetia_amphilecti_KMM_296.
 
 ```{r}
-file <- "C:/VL2/data/GTF_files/14.Cobetia_amphilecti_KMM_296_GCF_000754225.1.gtf"
+file <- ".././data/GTF_files/14.Cobetia_amphilecti_KMM_296_GCF_000754225.1.gtf"
 
 # Чтение GTF-файла
 gtf <- rtracklayer::readGFF(file)
@@ -85,7 +85,7 @@ target_gene_raw <- tibble(
 
 # Создаем график
 gtf %>%
-  filter(start > 4000, start < 6300, !is.na(gene), type == "CDS") %>% 
+  filter(start > 4000, start < 6000, !is.na(gene), type == "CDS") %>% 
   select(type, start, end, protein_id, gene, gene_id) %>% 
   bind_rows(target_gene_raw) %>% 
   arrange(start) %>% 
@@ -100,29 +100,11 @@ gtf %>%
 
 Попробуем ген "madM" в качестве центрирующего гена
 
-```{r}
-library(rtracklayer)
-
-# Указываем путь к вашему файлу GTF
-file <- "C:/VL2/data/GTF_files/14.Cobetia_amphilecti_KMM_296_GCF_000754225.1.gtf"
-
-# Читаем файл GTF и создаем объект GenomicRanges
-gr <- import(file)
-
-# Создаем геномный интервал для вашего участка
-your_interval <- GRanges("1", IRanges(4093, 6267))
-
-# Визуализируем
-plot(gr, ylim = c(4093, 6267)
-```
-
-library(GenomicRanges)
-
 Находим ген из окрестностей hppD, продукт которого - "alkaline phosphatase D family protein" для всех штаммов
 
 ```{r}
 window_size <- 1000
-target_gene_name <- "madM"
+target_gene_name <- "hppD"
 product_name <- "alkaline phosphatase D family protein"
 
 # Находим гены в окрестности target gene
@@ -146,13 +128,16 @@ target_genes <- genes_in_flanking_region %>%
 target_genes
 ```
 
+С помощью IGV браузера нашли ближайшие гены в окрестности KP05_RS10430, которые имеют названия: modA, modB, modC, ptsP, betT
+
 ```{r}
 # target gene
-
-target_gene_name <- "metG"
+target_gene_name <- "modA"
+target_product <- "alkaline phosphatase D family protein"
+sidestep <- 10000
 
 # Указать папку с файлами GTF
-gtf_folder <- "C:/VL/data/GTF_files/"
+gtf_folder <- ".././data/GTF_files/"
 
 # Получить список файлов GTF в папке
 gtf_files <- list.files(path = gtf_folder, pattern = "\\.gtf$", full.names = TRUE)
@@ -173,9 +158,9 @@ for (gtf_file in gtf_files) {
     filter(type == "CDS" & gene == target_gene_name) %>%
     mutate(start_target = start, end_target = end)
   
-  # Определяем окрестность 10000 оснований в каждую сторону от target
+  # Определяем окрестность sidestep оснований в каждую сторону от target
   flanking_region <- target_region %>%
-    mutate(start_flanking = start_target - 10000, end_flanking = end_target + 10000)
+    mutate(start_flanking = start_target - sidestep, end_flanking = end_target + sidestep)
   
   # Фильтруем данные для генов в определенной окрестности
   genes_in_flanking_region <- gtf_data %>%
@@ -184,9 +169,9 @@ for (gtf_file in gtf_files) {
   
   # Проверяем, не является ли набор данных пустым
   if (nrow(genes_in_flanking_region) > 0) {
-    # Отбираем гены с продуктом "alkaline phosphatase D family protein"
+    # Отбираем гены с продуктом target_product
     target_genes <- genes_in_flanking_region %>%
-      filter(product == "alkaline phosphatase D family protein") %>%
+      filter(product == target_product) %>%
       select(start, end, gene_id)
     
     # Добавляем результат к списку, включая название файла
@@ -204,3 +189,110 @@ final_result <- bind_rows(result_list, .id = "strain")
 # Печать итоговой таблицы
 print(final_result)
 ```
+
+betT не подходит.
+
+modA, modB, modC одинаково подходят для определения таргетного региона, но мы помним, что они лежат на другом стренде, что нехорошо.
+
+ptsP подходит, но хуже, чем mod\*
+
+В итоге используем modA.
+
+Найдем уникальные длины гомологов и длину самого часто встречающегося гомолога phoD из окрестности modA.
+
+```{r}
+# Добавим столбец длины гена
+final_result <- final_result %>% 
+  mutate(length = end - start)
+
+final_result %>%
+  group_by(length) %>%
+  mutate(count = n()) %>% 
+  select(length, count) %>% 
+  arrange(desc(count), desc(length)) %>%
+  distinct() %>% 
+  ggplot() +
+  aes(x = length, y = count, fill = factor(count)) + 
+  geom_bar(stat = "identity", position = "dodge") + 
+  geom_text(aes(label = length), vjust = -0.5, size = 3, check_overlap = TRUE) +
+  ggtitle("Distribution of Lengths") +
+  theme_minimal() + 
+  coord_flip()
+```
+
+```{r}
+# Функция нахождения моды
+find_mode <- function (x) {
+ u <- unique(x)
+ tab <- tabulate(match(x, u))
+ u[tab == max(tab)]
+}
+
+# найдем самую распространенныю длину гомолога
+mod_length <- final_result %>% 
+  pull(length) %>% 
+  find_mode()
+cat("mod_length:", mod_length)
+```
+
+Построим график геномной окрестности гомологов phoD, центрируя по гомологу. Рамкой обозначим границы самого встречающегося гомолога.
+
+```{r}
+library(tidyverse)
+library(GenomicFeatures)
+library(ggbio)
+
+# Получение списка файлов GTF в папке
+gtf_files <- final_result$filename
+
+# Функция для центрирования координат относительно указанного гена
+center_coordinates <- function(gtf_data, center_gene, window_size = 20000) {
+  center_gene_coords <- gtf_data %>%
+    filter(type == "CDS", gene_id == center_gene) %>%
+    dplyr::select(seqid, center_start = start, center_end = end)
+  
+  centered_data <- gtf_data %>%
+    filter(type == "CDS",
+           seqid %in% center_gene_coords$seqid) %>%
+    mutate(centered_start = start - center_gene_coords$center_start,
+           centered_end = end - center_gene_coords$center_start,
+           direction = if_else(centered_start < centered_end, "->", "<-")) %>%
+    filter(centered_end >= -window_size, centered_start <= window_size) %>%
+    dplyr::select(gene, product, centered_start, centered_end, direction)
+  
+  return(centered_data)
+}
+
+# Считывание и центрирование данных
+center_gene_list <- final_result$gene_id
+
+centered_genes_list <- lapply(seq_along(gtf_files), function(i) {
+  file <- gtf_files[i]
+  center_gene <- center_gene_list[i]
+  
+  gtf <- rtracklayer::readGFF(file)
+  centered_genes <- center_coordinates(gtf, center_gene)
+  return(centered_genes)
+})
+
+# Объединение данных из всех файлов
+all_centered_genes <- bind_rows(centered_genes_list, .id = "file_id")
+
+# Изменение лейблов по вертикали
+gtf_files_labels <- gsub("\\d+\\.", "", gsub("_GCF_.*", "", basename(gtf_files)))
+
+# Создание графика
+p <- ggplot() +
+  geom_rect(data = all_centered_genes,
+            aes(xmin = centered_start, xmax = centered_end, ymin = as.numeric(file_id) - 0.4, ymax = as.numeric(file_id) + 0.4, fill = gene),
+            alpha = 1) +
+  scale_y_continuous(breaks = seq_along(gtf_files), labels = gtf_files_labels) +
+  theme_minimal() +
+  geom_vline(xintercept = 0, color = "blue", linetype = "solid") +
+  geom_vline(xintercept = mod_length, color = "blue", linetype = "solid")
+
+# Вывод графика
+p
+```
+
+Наверное лучше разбить на группы по длине гомологов.
