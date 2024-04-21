@@ -49,12 +49,6 @@ gtf %>%
 Есть 2 гомолога, нам нужен именно WP_052384691.1
 
 ```{r}
-
-file <- "C:/VL2/data/GTF_files/14.Cobetia_amphilecti_KMM_296_GCF_000754225.1.gtf"
-
-# Чтение GTF-файла
-gtf <- rtracklayer::readGFF(file)
-
 # Найти координаты гомолога по protein_id
 gtf %>%
   filter(protein_id == "WP_052384691.1") %>% 
@@ -97,21 +91,21 @@ gtf %>%
   theme_minimal()
 ```
 
-Попробуем ген "madM" в качестве центрирующего гена
+Попробуем ген "modA" в качестве центрирующего гена
 
-Находим ген из окрестностей hppD, продукт которого - "alkaline phosphatase D family protein" для всех штаммов
+Находим ген из окрестностей modA, продукт которого - "alkaline phosphatase D family protein" для всех штаммов
 
 ```{r}
-window_size <- 1000
-target_gene_name <- "hppD"
+window_size <- 10000
+target_gene_name <- "modA"
 product_name <- "alkaline phosphatase D family protein"
 
 # Находим гены в окрестности target gene
 target_region <- gtf %>%
-  filter(type == "gene" & gene == "yegS") %>%
+  filter(type == "gene" & gene == target_gene_name) %>%
   mutate(start_target = start, end_target = end)
 
-# Определяем окрестность 10000 оснований в каждую сторону от target
+# Определяем окрестность window_size оснований в каждую сторону от target
 flanking_region <- target_region %>%
   mutate(start_flanking = start_target - window_size, end_flanking = end_target + window_size)
 
@@ -215,7 +209,7 @@ length_distr <- final_result %>%
 
 length_distr %>% 
   ungroup() %>% 
-  select(protein_id)
+  select(protein_id) %>% view()
 ```
 
 Полученный список можно использовать для мультивыравнивания [Cobalt](https://www.ncbi.nlm.nih.gov/tools/cobalt/cobalt.cgi)
@@ -253,7 +247,7 @@ cat("mod_length:", mod_length)
 gtf_files <- final_result$filename
 
 # Функция для центрирования координат относительно указанного гена
-center_coordinates <- function(gtf_data, center_gene, window_size = 20000) {
+center_coordinates <- function(gtf_data, center_gene, window_size = 2000) {
   center_gene_coords <- gtf_data %>%
     filter(type == "CDS", gene_id == center_gene) %>%
     dplyr::select(seqid, center_start = start, center_end = end)
