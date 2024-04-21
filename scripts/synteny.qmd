@@ -2,7 +2,7 @@
 title: "synteny"
 author: "Glebus Alexandr"
 date: "`r Sys.Date()`"
-format: "docx"
+format: "html"
 ---
 
 # Исследовние синтении Cobetia spp
@@ -376,7 +376,7 @@ length_distr <- final_result %>%
 
 length_distr %>% 
   ungroup() %>% 
-  select(protein_id)
+  select(protein_id) %>% view()
 ```
 
 ```{r}

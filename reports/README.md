@@ -17,4 +17,11 @@
 
 ### 3. Исследование синтении.
 
-В процессе...
+Начало в 
+scripts/synteny.qmd
+Полученный список accessions мультивыравнен с помощью Cobalt 
+https://www.ncbi.nlm.nih.gov/tools/cobalt/
+Получен файл phoD.aln, который обработан с помощью MAFFT (все настройки по дефолту)
+https://mafft.cbrc.jp/alignment/server/index.html
+Получено дерево
+https://mafft.cbrc.jp/alignment/server/spool/_phyloio.240422060818725.html
