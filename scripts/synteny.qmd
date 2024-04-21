@@ -2,7 +2,7 @@
 title: "synteny"
 author: "Glebus Alexandr"
 date: "`r Sys.Date()`"
-output: "html"
+output: "docx"
 ---
 
 # Исследовние синтении Cobetia spp
@@ -92,8 +92,7 @@ gtf %>%
   theme_minimal()
 ```
 
-Теперь сделаем всё это для всех phoD
-Создадим датафрейм, содержащий наши гомологи phoD
+Теперь сделаем всё это для всех phoD Создадим датафрейм, содержащий наши гомологи phoD
 
 ```{r}
 # target gene
@@ -154,6 +153,7 @@ final_result %>%
       select(strain, start, end, gene_id, protein_id)
 
 ```
+
 Найдем уникальные длины гомологов и длину самого часто встречающегося гомолога phoD из окрестности modA.
 
 ```{r}
@@ -172,7 +172,9 @@ length_distr %>%
   ungroup() %>% 
   select(protein_id) %>% view()
 ```
+
 Полученный список можно использовать для мультивыравнивания [Cobalt](https://www.ncbi.nlm.nih.gov/tools/cobalt/cobalt.cgi)
+
 ```{r}
 length_distr %>% 
   ggplot() +
@@ -198,7 +200,9 @@ mod_length <- final_result %>%
   find_mode()
 cat("mod_length:", mod_length)
 ```
+
 Построим график геномной окрестности гомологов phoD, центрируя по гомологу. Рамкой обозначим границы самого встречающегося гомолога. window_size можно регулировать.
+
 ```{r}
 # Получение списка файлов GTF в папке
 gtf_files <- final_result$filename
@@ -256,6 +260,7 @@ p
 ```
 
 Интерактивный график
+
 ```{r}
 # Создание графика
 p <- ggplot() +
@@ -274,4 +279,3 @@ p <- ggplotly(p)
 # Вывод графика
 p
 ```
-
