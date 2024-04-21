@@ -8,7 +8,7 @@ output: "docx"
 # Исследовние синтении Cobetia spp
 
 ```{r}
-knitr::opts_chunk$set(echo = FALSE, tidy = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 library(GenomicFeatures)
 library(dplyr)
 library(tidyverse)
