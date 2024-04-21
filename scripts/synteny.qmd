@@ -12,7 +12,6 @@ knitr::opts_chunk$set(echo = TRUE)
 library(GenomicFeatures)
 library(dplyr)
 library(tidyverse)
-library(GenomicFeatures)
 library(ggbio)
 library(GenomicRanges)
 library(Gviz)
@@ -128,7 +127,17 @@ target_genes <- genes_in_flanking_region %>%
 target_genes
 ```
 
-С помощью IGV браузера нашли ближайшие гены в окрестности KP05_RS10430, которые имеют названия: modA, modB, modC, ptsP, betT
+С помощью IGV браузера нашли ближайшие гены в окрестности KP05_RS10430, которые имеют названия: modA, modB, modC, ptsP, betT.
+
+betT не подходит.
+
+modA, modB, modC одинаково подходят для определения таргетного региона, но мы помним, что они лежат на другом стренде, что нехорошо.
+
+ptsP подходит, но хуже, чем mod\*
+
+В итоге используем modA.
+
+Создадим датафрейм, содержащий наши гомологи phoD
 
 ```{r}
 # target gene
@@ -171,8 +180,7 @@ for (gtf_file in gtf_files) {
   if (nrow(genes_in_flanking_region) > 0) {
     # Отбираем гены с продуктом target_product
     target_genes <- genes_in_flanking_region %>%
-      filter(product == target_product) %>%
-      select(start, end, gene_id)
+      filter(product == target_product)
     
     # Добавляем результат к списку, включая название файла
     result_list[[strain_name]] <- target_genes %>%
@@ -186,17 +194,10 @@ for (gtf_file in gtf_files) {
 # Соединяем все результаты в одну таблицу (если необходимо)
 final_result <- bind_rows(result_list, .id = "strain")
 
-# Печать итоговой таблицы
-print(final_result)
+final_result %>%
+      select(start, end, gene_id, protein_id)
+
 ```
-
-betT не подходит.
-
-modA, modB, modC одинаково подходят для определения таргетного региона, но мы помним, что они лежат на другом стренде, что нехорошо.
-
-ptsP подходит, но хуже, чем mod\*
-
-В итоге используем modA.
 
 Найдем уникальные длины гомологов и длину самого часто встречающегося гомолога phoD из окрестности modA.
 
@@ -205,16 +206,26 @@ ptsP подходит, но хуже, чем mod\*
 final_result <- final_result %>% 
   mutate(length = end - start)
 
-final_result %>%
+length_distr <- final_result %>%
   group_by(length) %>%
   mutate(count = n()) %>% 
-  select(length, count) %>% 
+  select(length, count, protein_id) %>% 
   arrange(desc(count), desc(length)) %>%
-  distinct() %>% 
+  distinct()
+
+length_distr %>% 
+  ungroup() %>% 
+  select(protein_id)
+```
+
+Полученный список можно использовать для мультивыравнивания [Cobalt](https://www.ncbi.nlm.nih.gov/tools/cobalt/cobalt.cgi)
+
+```{r}
+length_distr %>% 
   ggplot() +
   aes(x = length, y = count, fill = factor(count)) + 
   geom_bar(stat = "identity", position = "dodge") + 
-  geom_text(aes(label = length), vjust = -0.5, size = 3, check_overlap = TRUE) +
+  geom_text(aes(label = protein_id), vjust = -0.5, size = 3, check_overlap = TRUE) +
   ggtitle("Distribution of Lengths") +
   theme_minimal() + 
   coord_flip()
@@ -235,13 +246,9 @@ mod_length <- final_result %>%
 cat("mod_length:", mod_length)
 ```
 
-Построим график геномной окрестности гомологов phoD, центрируя по гомологу. Рамкой обозначим границы самого встречающегося гомолога.
+Построим график геномной окрестности гомологов phoD, центрируя по гомологу. Рамкой обозначим границы самого встречающегося гомолога. window_size можно регулировать.
 
 ```{r}
-library(tidyverse)
-library(GenomicFeatures)
-library(ggbio)
-
 # Получение списка файлов GTF в папке
 gtf_files <- final_result$filename
 
