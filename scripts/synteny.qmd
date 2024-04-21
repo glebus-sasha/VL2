@@ -262,6 +262,19 @@ p
 Интерактивный график
 
 ```{r}
+window_size <- 50000
+
+# Считывание и центрирование данных
+center_gene_list <- final_result$gene_id
+
+centered_genes_list <- lapply(seq_along(gtf_files), function(i) {
+  file <- gtf_files[i]
+  center_gene <- center_gene_list[i]
+  
+  gtf <- rtracklayer::readGFF(file)
+  centered_genes <- center_coordinates(gtf, center_gene, window_size)
+  return(centered_genes)
+})
 # Создание графика
 p <- ggplot() +
   geom_rect(data = all_centered_genes,
