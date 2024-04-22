@@ -6,5 +6,5 @@ https://www.mdpi.com/2076-2607/12/3/631
 Getting started can be found here:
 https://github.com/glebus-sasha/VL
 
-You can start Interactive Synteny Analysis Application:
+You can start __Interactive Synteny Analysis Application__:
 https://glebus-sasha.shinyapps.io/synteny/
