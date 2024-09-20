@@ -8,3 +8,8 @@ https://github.com/glebus-sasha/VL
 
 You can start __Interactive Synteny Analysis Application__:
 https://glebus-sasha.shinyapps.io/synteny/
+
+## Contributors
+
+- Oxana Kolpakova ([@OxanaKolpakova](https://github.com/OxanaKolpakova))
+- Glebus Aleksandr ([@glebus-sasha](https://github.com/glebus-sasha/))
